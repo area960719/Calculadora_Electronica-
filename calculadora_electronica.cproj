@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>CalculadoraElectronica</RootNamespace>
+    <AssemblyName>CalculadoraElectronica</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2739.15" />
+    <EmbeddedResource Include="calculadora-electronica-completa.html" LogicalName="calculadora.html" />
+  </ItemGroup>
+
+</Project>
