@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calculadora de electrónica</title>
+<style>
+:root{--bg:#eef1f4;--card:#fff;--ink:#1c2733;--mut:#66758a;--line:#d5dce4;--acc:#1b5e8a;--res:#e6f2fa}
+@media (prefers-color-scheme:dark){:root{--bg:#141a21;--card:#1d252e;--ink:#e6ebf0;--mut:#93a1b3;--line:#2e3a47;--acc:#5aa9dc;--res:#17303f}}
+*{box-sizing:border-box}
+body{margin:auto;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,Segoe UI,Roboto,sans-serif;padding:12px;max-width:640px}
+h1{font-size:1.35rem;margin:6px 0 4px}
+h2{font-size:1.05rem;margin:0 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+label{font-size:.8rem;color:var(--mut);display:block}
+input,select{width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.out{background:var(--res);border-radius:8px;padding:10px;margin-top:8px;min-height:2.6em;font-weight:600}
+.hint{font-size:.8rem;color:var(--mut);margin-top:6px}
+table{width:100%;border-collapse:collapse;font-size:.85rem;font-weight:400}
+td{padding:3px 4px;border-bottom:1px solid var(--line)}
+.top{display:flex;gap:8px;margin:8px 0 12px}
+</style>
+</head>
+<body>
+<h1>Calculadora de electrónica</h1>
+<div class="top"><select id="ir" aria-label="Ir a una herramienta"></select></div>
+
+<script>
+function $(i){return document.getElementById(i)}
+function fmt(n,u){
+  if(!isFinite(n))return "—";
+  if(n===0)return "0 "+u;
+  var p=[[1e9,"G"],[1e6,"M"],[1e3,"k"],[1,""],[1e-3,"m"],[1e-6,"µ"],[1e-9,"n"],[1e-12,"p"]],a=Math.abs(n);
+  for(var i=0;i<p.length;i++)if(a>=p[i][0])return (Math.round(n/p[i][0]*1000)/1000)+" "+p[i][1]+u;
+  return n.toExponential(2)+" "+u;
+}
+function pv(s){
+  s=s.trim().toLowerCase().replace(",",".");
+  var m=s.match(/^(\d*\.?\d+)\s*([km]?)$/);
+  return m?parseFloat(m[1])*({k:1e3,m:1e6,"":1}[m[2]]):NaN;
+}
+function bad(){return "Revisa los datos."}
+function nan(v){return v.some(function(x){return isNaN(x)})}
+
+var CN=["Negro","Marrón","Rojo","Naranja","Amarillo","Verde","Azul","Violeta","Gris","Blanco"];
+var MN=CN.concat(["Dorado (×0.1)","Plateado (×0.01)"]);
+var TN=["Dorado ±5%","Plateado ±10%","Marrón ±1%","Rojo ±2%"];
+var RAILS=[["+12 V",12,.05],["+5 V",5,.05],["+3.3 V",3.3,.05],["5VSB (cable morado)",5,.05],["−12 V (cable azul)",-12,.1],["PS_ON (cable verde)"],["PWR_OK (cable gris)"]];
+var U=[["V",1,0],["mV",1e-3,0],["µV",1e-6,0],["A",1,1],["mA",1e-3,1],["µA",1e-6,1],["F",1,2],["µF",1e-6,2],["nF",1e-9,2],["pF",1e-12,2],["Ω",1,3],["kΩ",1e3,3],["MΩ",1e6,3]];
+var AWG=[["AWG 24",.0842],["AWG 22",.0530],["AWG 20",.0333],["AWG 18",.0210],["AWG 16",.0132],["AWG 14",.00829],["AWG 12",.00521]];
+
+var T=[
+{t:"1. Ley de Ohm y potencia",h:"Llena exactamente dos casillas y se calculan las otras.",
+ f:[["Voltaje (V)","n",""],["Corriente (A)","n",""],["Resistencia (Ω)","n",""],["Potencia (W)","n",""]],
+ r:function(v){
+  var V=v[0],I=v[1],R=v[2],P=v[3],a=!isNaN(V),b=!isNaN(I),c=!isNaN(R),d=!isNaN(P);
+  if(a+b+c+d!==2)return "Llena exactamente dos casillas.";
+  if(a&&b){R=V/I;P=V*I}else if(a&&c){I=V/R;P=V*V/R}else if(a&&d){I=P/V;R=V*V/P}
+  else if(b&&c){V=I*R;P=I*I*R}else if(b&&d){V=P/I;R=P/(I*I)}else{V=Math.sqrt(P*R);I=Math.sqrt(P/R)}
+  return fmt(V,"V")+" · "+fmt(I,"A")+" · "+fmt(R,"Ω")+" · "+fmt(P,"W");
+ }},
+{t:"2. Resistor por colores (4 y 5 bandas)",h:"En 5 bandas se usa también la banda 3 como tercer dígito.",
+ f:[["Bandas","s",["4 bandas","5 bandas"]],["Banda 1","s",CN.slice(1)],["Banda 2","s",CN],["Banda 3 (solo 5 bandas)","s",CN],["Multiplicador","s",MN],["Tolerancia","s",TN]],
+ r:function(v){
+  var d=(v[1]+1)*10+v[2],m=v[4]<10?Math.pow(10,v[4]):(v[4]===10?.1:.01);
+  if(v[0]===1)d=d*10+v[3];
+  return fmt(d*m,"Ω")+" "+TN[v[5]].split(" ")[1];
+ }},
+{t:"3. Leer código impreso",h:"Resistor: 103, 4R7, 1002, 4K7. Capacitor: 104, 224K (la letra es la tolerancia).",
+ f:[["La pieza es un","s",["Resistor SMD","Capacitor"]],["Código","t","103"]],
+ r:function(v){
+  var s=v[1].trim().toUpperCase(),x=null;
+  if(!s)return "";
+  if(v[0]===1){
+    var m=s.match(/^(\d{2})(\d)([FGJKMZ])?$/);
+    if(!m)return "Escribe 3 cifras y, si tiene, la letra (ej. 104K).";
+    var pf=parseInt(m[1],10)*Math.pow(10,+m[2]),tl={F:"±1%",G:"±2%",J:"±5%",K:"±10%",M:"±20%",Z:"+80/−20%"};
+    return fmt(pf*1e-12,"F")+" ("+pf+" pF)"+(m[3]?" "+tl[m[3]]:"");
+  }
+  if(/^\d*R\d+$/.test(s))x=parseFloat(s.replace("R","."));
+  else if(/^\d*K\d*$/.test(s)&&s.length>1)x=parseFloat(s.replace("K","."))*1e3;
+  else if(/^\d{3,4}$/.test(s))x=parseInt(s.slice(0,-1),10)*Math.pow(10,+s.slice(-1));
+  return x===null||isNaN(x)?"Código no reconocido.":fmt(x,"Ω");
+ }},
+{t:"4. Resistencia para un LED",h:"Caída típica: rojo 1.8–2 V, verde 2–2.2 V, azul y blanco 3–3.3 V. Usa la medida comercial siguiente hacia arriba.",
+ f:[["Fuente (V)","n",5],["Caída del LED (V)","n",2],["Corriente (mA)","n",10]],
+ r:function(v){
+  if(nan(v)||v[2]<=0)return bad();
+  if(v[0]<=v[1])return "La fuente debe ser mayor que la caída del LED.";
+  var I=v[2]/1000;return fmt((v[0]-v[1])/I,"Ω")+" · calor "+fmt((v[0]-v[1])*I,"W");
+ }},
+{t:"5. Divisor de voltaje",h:"Sirve para entender las señales de 3.3 V, 5 V y 12 V de una placa.",
+ f:[["Entrada (V)","n",12],["R1 superior (Ω)","n",10000],["R2 inferior (Ω)","n",10000]],
+ r:function(v){
+  if(nan(v)||v[1]+v[2]<=0)return bad();
+  return "Salida "+fmt(v[0]*v[2]/(v[1]+v[2]),"V")+" · corriente "+fmt(v[0]/(v[1]+v[2]),"A");
+ }},
+{t:"6. Verificador de voltajes de fuente y placa",h:"Rangos ATX: ±5% en los positivos y ±10% en −12 V. Mide con el multímetro en continua.",
+ f:[["Señal","s",RAILS.map(function(r){return r[0]})],["Medido (V)","n",""]],
+ r:function(v){
+  var m=v[1],k=RAILS[v[0]];
+  if(isNaN(m))return "Escribe el valor medido.";
+  if(v[0]===5)return m<=.8?"Fuente encendida: bien.":(m>=2?"Fuente apagada (normal si aún no arranca).":"Valor dudoso.");
+  if(v[0]===6)return m>=2.4?"Bien (señal de energía correcta).":(m<1?"Sin señal: fuente o carga con falla.":"Valor dudoso.");
+  var a=k[1]*(1-k[2]),b=k[1]*(1+k[2]),lo=Math.min(a,b),hi=Math.max(a,b);
+  return (m>=lo&&m<=hi?"Normal":"Fuera de rango")+" (debe estar entre "+lo.toFixed(2)+" y "+hi.toFixed(2)+" V)";
+ }},
+{t:"7. Resistencias en serie y en paralelo",h:"Separa con comas. Acepta k y M: 10k, 4.7k, 220.",
+ f:[["Valores","t","10k, 4.7k"],["Conexión","s",["Serie","Paralelo"]]],
+ r:function(v){
+  var a=v[0].split(",").map(pv);
+  if(a.length<2||a.some(function(x){return isNaN(x)||x<=0}))return "Escribe al menos dos valores válidos.";
+  var t=v[1]===0?a.reduce(function(x,y){return x+y},0):1/a.reduce(function(x,y){return x+1/y},0);
+  return "Total: "+fmt(t,"Ω");
+ }},
+{t:"8. Batería: energía, duración y carga",h:"La carga se estima con 80% de eficiencia.",
+ f:[["Capacidad (mAh)","n",4000],["Voltaje (V)","n",3.85],["Consumo (mA)","n",400],["Cargador (mA)","n",2000]],
+ r:function(v){
+  if(nan(v)||v[2]<=0||v[3]<=0)return bad();
+  function h(x){return (Math.round(x*10)/10)+" h"}
+  return (v[0]*v[1]/1000).toFixed(2)+" Wh · dura "+h(v[0]/v[2])+" · carga completa en ~"+h(v[0]/(v[3]*.8));
+ }},
+{t:"9. Compatibilidad de cargador",h:"El voltaje debe coincidir (±5%) y el amperaje del cargador debe ser igual o mayor. Revisa también la polaridad.",
+ f:[["Equipo: voltaje (V)","n",19],["Equipo: corriente (A)","n",3.42],["Cargador: voltaje (V)","n",19],["Cargador: corriente (A)","n",4.74]],
+ r:function(v){
+  if(nan(v))return bad();
+  var okV=Math.abs(v[2]-v[0])<=v[0]*.05,okA=v[3]>=v[1];
+  if(okV&&okA)return "Compatible.";
+  return "No sirve: "+(okV?"":"el voltaje no coincide. ")+(okA?"":"el cargador da menos corriente que la que pide el equipo.");
+ }},
+{t:"10. Convertidor de unidades",h:"Convierte dentro de la misma familia: voltaje, corriente, capacitancia y resistencia.",
+ f:[["Valor","n",100],["Unidad","s",U.map(function(u){return u[0]})]],
+ r:function(v){
+  if(isNaN(v[0]))return bad();
+  var u=U[v[1]],b=v[0]*u[1];
+  return U.filter(function(x){return x[2]===u[2]&&x!==u}).map(function(x){return +(b/x[1]).toPrecision(8)+" "+x[0]}).join(" · ");
+ }},
+{t:"11. Resistor de 5 bandas y tolerancias",h:"Ya incluido en las herramientas 2 y 3: elige «5 bandas» arriba y escribe la letra después del código del capacitor (104K).",f:[],r:function(){return ""}},
+{t:"12. Referencia de pines",h:"Para arrancar una fuente ATX sin placa: puentea el cable verde (pin 16) con cualquier negro.",f:[],
+ r:function(){
+  function tb(a){return "<table>"+a.map(function(r){return "<tr><td>"+r.join("</td><td>")+"</td></tr>"}).join("")+"</table>"}
+  return "ATX 24 pines"+tb([["1, 2, 12, 13","+3.3 V (naranja)"],["4, 6, 21–23","+5 V (rojo)"],["10, 11","+12 V (amarillo)"],["9","5VSB (morado)"],["8","PWR_OK (gris)"],["16","PS_ON (verde)"],["14","−12 V (azul)"],["3, 5, 7, 15, 17–19, 24","Tierra (negro)"]])+
+  "USB 2.0"+tb([["Rojo","+5 V"],["Blanco","D−"],["Verde","D+"],["Negro","Tierra"]])+
+  "Micro USB (pines 1 a 5)"+tb([["1","+5 V"],["2","D−"],["3","D+"],["4","ID"],["5","Tierra"]])+
+  "USB-C"+tb([["A4, B4, A9, B9","VBUS (+5 V o más)"],["A1, B1, A12, B12","Tierra"],["A5 / B5","CC1 / CC2"],["A6, B6 / A7, B7","D+ / D−"]]);
+ }},
+{t:"13. Caída de voltaje en cables",h:"Se cuenta ida y vuelta. Hasta 3% suele ser aceptable.",
+ f:[["Calibre","s",AWG.map(function(a){return a[0]})],["Largo (m)","n",2],["Corriente (A)","n",3],["Voltaje (V)","n",12]],
+ r:function(v){
+  var a=v.slice(1);
+  if(nan(a)||a[2]<=0)return bad();
+  var d=a[1]*AWG[v[0]][1]*2*a[0],p=d/a[2]*100;
+  return "Caída "+fmt(d,"V")+" ("+p.toFixed(1)+"%) · calor "+fmt(d*a[1],"W")+(p<=3?" · aceptable":" · usa cable más grueso o más corto");
+ }},
+{t:"14. Temporizador 555 (astable)",h:"Para circuitos como el controlador de un ventilador o parpadeos.",
+ f:[["R1 (Ω)","n",1000],["R2 (Ω)","n",10000],["C (µF)","n",1]],
+ r:function(v){
+  if(nan(v)||v[0]<=0||v[1]<=0||v[2]<=0)return bad();
+  var c=v[2]*1e-6,f=1.44/((v[0]+2*v[1])*c);
+  return fmt(f,"Hz")+" · alto "+fmt(.693*(v[0]+v[1])*c,"s")+" · bajo "+fmt(.693*v[1]*c,"s")+" · ciclo "+((v[0]+v[1])/(v[0]+2*v[1])*100).toFixed(0)+"%";
+ }}
+];
+
+var sel=$("ir");
+sel.innerHTML='<option value="">Ir a una herramienta…</option>'+T.map(function(t,i){return '<option value="c'+i+'">'+t.t+'</option>'}).join("");
+sel.addEventListener("change",function(){var e=$(sel.value);if(e)e.scrollIntoView({behavior:"smooth"})});
+
+T.forEach(function(t,i){
+  var c=document.createElement("div");
+  c.className="card";c.id="c"+i;
+  var h="<h2>"+t.t+'</h2><div class="g">';
+  t.f.forEach(function(f,j){
+    var id="f"+i+"_"+j;
+    h+='<div><label for="'+id+'">'+f[0]+"</label>";
+    if(f[1]==="s")h+='<select id="'+id+'">'+f[2].map(function(o,k){return '<option value="'+k+'">'+o+"</option>"}).join("")+"</select>";
+    else h+='<input id="'+id+'" '+(f[1]==="n"?'type="number" step="any" inputmode="decimal"':"")+' value="'+f[2]+'">';
+    h+="</div>";
+  });
+  h+='</div><div class="out" id="o'+i+'" role="status"></div>'+(t.h?'<div class="hint">'+t.h+"</div>":"");
+  c.innerHTML=h;
+  document.body.appendChild(c);
+  function run(){
+    var v=t.f.map(function(f,j){
+      var x=$("f"+i+"_"+j).value;
+      return f[1]==="s"?parseInt(x,10):(f[1]==="n"?parseFloat(x):x);
+    });
+    $("o"+i).innerHTML=t.r(v);
+  }
+  c.addEventListener("input",run);
+  c.addEventListener("change",run);
+  run();
+});
+</script>
+</body>
+</html>
